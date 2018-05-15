@@ -21,8 +21,9 @@ import Code.Code as Code
 import FeatherIcons
 import Graph exposing (Edge, Graph, Node, NodeContext)
 import Html exposing (Html, button, div, fieldset, form, form, h2, input, label, legend, p, span, text)
-import Html.Attributes exposing (for, id, type_, value)
+import Html.Attributes exposing (autocomplete, autofocus, for, id, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
+import IntDict
 import Machine.Machine as Machine
 import Styles.Styles exposing (defaultButtonClasses)
 import Svg.Attributes exposing (height)
@@ -32,13 +33,13 @@ import Time exposing (Time)
 import Timer.Timer as Timer exposing (Timer)
 
 
-type alias Model msg =
+type alias Model =
     { state : State
     , failedAttempts : Int
     , screen : Screen
     , name : String
     , scenarioElements : ScenarioElements
-    , timer : Timer msg
+    , timer : Timer
     , penaltyOnFailedAttempt : Int -> AttemptPenalty
     }
 
@@ -50,6 +51,8 @@ type Screen
     | ElementDoneScreen Int ScenarioElement
     | MachineNotFoundScreen String
     | CodeTypingScreen Code.Model
+    | MachineMissingDependenciesScreen Int
+    | CodeMissingDependenciesScreen
 
 
 type Msg
@@ -72,6 +75,11 @@ type alias ScenarioElement =
     , successText : String
     , element : Element
     }
+
+
+type DependenciesState
+    = AtLeastOneRemaining
+    | AllDone
 
 
 type alias ScenarioElements =
@@ -101,10 +109,10 @@ type State
     | Lost
 
 
-type alias ScenarioData a =
+type alias ScenarioData =
     { name : String
     , scenarioElements : ScenarioElements
-    , timer : Timer a
+    , timer : Timer
     , penaltyOnFailedAttempt : Int -> AttemptPenalty
     }
 
@@ -114,20 +122,23 @@ type Reward
     | Time Time
 
 
-fromScenarioData : ScenarioData a -> Model a
+fromScenarioData : ScenarioData -> Model
 fromScenarioData scenarioData =
     Model NotStarted 0 MainScreen scenarioData.name scenarioData.scenarioElements scenarioData.timer scenarioData.penaltyOnFailedAttempt
 
 
-update : Msg -> Model msg -> Model msg
+update : Msg -> Model -> Model
 update msg model =
     case ( model.state, msg ) of
         ( Running, TimerMsg message ) ->
             let
-                ( newTimer, _ ) =
+                ( newTimer, timerStatus ) =
                     Timer.update message model.timer
             in
-                { model | timer = newTimer }
+                if timerStatus.remaining <= 0 then
+                    { model | state = Lost, timer = newTimer }
+                else
+                    { model | timer = newTimer }
 
         ( Running, Pause ) ->
             { model | state = Paused, timer = Timer.pause model.timer }
@@ -177,8 +188,11 @@ update msg model =
                         |> Maybe.andThen (getMachineFromId model.scenarioElements)
             in
                 case machineMaybe of
-                    Just ( machineId, machine ) ->
-                        ({ model | screen = MachineScreen machineId machine })
+                    Just ( machineId, machine, dependenciesState ) ->
+                        if dependenciesState == AtLeastOneRemaining then
+                            ({ model | screen = MachineMissingDependenciesScreen machineId })
+                        else
+                            ({ model | screen = MachineScreen machineId machine })
 
                     Nothing ->
                         ({ model | screen = MachineNotFoundScreen machineIdString })
@@ -195,7 +209,7 @@ update msg model =
             model
 
 
-start : Model msg -> Model msg
+start : Model -> Model
 start model =
     let
         startedTimer =
@@ -204,7 +218,7 @@ start model =
         { model | state = Running, timer = startedTimer }
 
 
-resume : Model msg -> Model msg
+resume : Model -> Model
 resume model =
     let
         startedTimer =
@@ -216,7 +230,7 @@ resume model =
             model
 
 
-updateMachine : Int -> Machine.Model -> Machine.Msg -> Model msg -> Model msg
+updateMachine : Int -> Machine.Model -> Machine.Msg -> Model -> Model
 updateMachine machineId machine message model =
     let
         ( updatedMachine, attemptMaybe ) =
@@ -269,7 +283,7 @@ updateMachine machineId machine message model =
                 { model | screen = MachineScreen machineId updatedMachine }
 
 
-updateCode : Code.Model -> Code.Msg -> Model msg -> Model msg
+updateCode : Code.Model -> Code.Msg -> Model -> Model
 updateCode codeModel codeMsg model =
     let
         ( newCodeModel, codeMaybe ) =
@@ -279,13 +293,10 @@ updateCode codeModel codeMsg model =
             codeMaybe |> Maybe.andThen (findCodeIdInElements model.scenarioElements)
     in
         case ( codeMaybe, validCodeIdMaybe ) of
-            ( Just code, Just codeId ) ->
+            ( Just code, Just ( codeId, dependenciesState ) ) ->
                 let
                     updatedScenarioElements =
                         Graph.update codeId flagNodeContextAsDone model.scenarioElements
-
-                    updatedScreen =
-                        Graph.get
 
                     finalState =
                         Graph.get codeId updatedScenarioElements
@@ -298,11 +309,16 @@ updateCode codeModel codeMsg model =
                         else
                             model.state
                 in
-                    { model
-                        | screen = MainScreen
-                        , scenarioElements = updatedScenarioElements
-                        , state = scenarioState
-                    }
+                    case dependenciesState of
+                        AtLeastOneRemaining ->
+                            { model | screen = CodeMissingDependenciesScreen }
+
+                        AllDone ->
+                            { model
+                                | screen = MainScreen
+                                , scenarioElements = updatedScenarioElements
+                                , state = scenarioState
+                            }
 
             ( Just code, Nothing ) ->
                 let
@@ -323,29 +339,29 @@ updateCode codeModel codeMsg model =
                 { model | screen = CodeTypingScreen newCodeModel }
 
 
-view : Model msg -> Html Msg
+view : Model -> Html Msg
 view model =
     case model.state of
         NotStarted ->
-            div [] [ text "The scenario is not started yet" ]
+            div [] [ text "Le scénario n'a pas encore démarré..." ]
 
         Running ->
             viewScreen model
 
         Paused ->
             div []
-                [ p [] [ text "The game is paused" ]
+                [ p [] [ text "Le jeu est en pause, n'en profitez pas pour tricher ! ;-)" ]
                 , div [] [ button [ classes defaultButtonClasses, onClick Resume ] [ FeatherIcons.play |> FeatherIcons.toHtml [] ] ]
                 ]
 
         Won ->
-            div [ classes [ f2 ] ] [ text "You've won, congratulations!" ]
+            div [ classes [ f2 ] ] [ text "Vous avez gagné, félicitations !" ]
 
-        _ ->
-            div [ classes [] ] [ text "Not running" ]
+        Lost ->
+            div [ classes [ f2 ] ] [ text "Trop tard, vous avez perdu..." ]
 
 
-viewScreen : Model msg -> Html Msg
+viewScreen : Model -> Html Msg
 viewScreen model =
     div []
         [ h2 [ classes [ f2, lh_title ] ] [ text model.name ]
@@ -368,6 +384,12 @@ viewScreen model =
 
             MachineNotFoundScreen machineIdString ->
                 viewMachineNotFoundScreen machineIdString
+
+            MachineMissingDependenciesScreen machineId ->
+                viewMachineMissingDependenciesScreen machineId
+
+            CodeMissingDependenciesScreen ->
+                viewCodeMissingDependenciesScreen
         ]
 
 
@@ -413,12 +435,12 @@ viewMachineSelectionScreen machineId =
     div []
         [ form [ onSubmit (SelectMachine machineId), classes [ mw7, center, pa4, br2_ns, ba, b__black_10, bg_blue, mb3 ] ]
             [ fieldset [ classes [ cf, bn, ma0, pa0 ] ]
-                [ legend [ classes [ pa0, f5, f4_ns, mb3, white, tl ] ] [ text "Enter your machine code" ]
+                [ legend [ classes [ pa0, f5, f4_ns, mb3, white, tl ] ] [ text "Saisissez le code correspondant à la machine" ]
                 , div
                     [ classes [ cf ] ]
-                    [ label [ classes [ clip ], for "machineId" ] [ text "Machine code" ]
-                    , input [ classes [ border_box, bn, f6, f5_l, input_reset, fl, black_80, bg_white, pa3, lh_solid, w_100, w_75_m, w_80_l, br2_ns, br__left_ns ], id "machineId", value machineId, onInput OnMachineIdInput ] []
-                    , input [ type_ "submit", classes [ f6, f5_l, button_reset, fl, pv3, tc, bn, bg_animate, bg_black_70, hover_bg_black, white, pointer, w_100, w_25_m, w_20_l, br2_ns, br__right_ns ] ] [ text "Show machine" ]
+                    [ label [ classes [ clip ], for "machineId" ] [ text "Code de la machine" ]
+                    , input [ autocomplete False, autofocus True, classes [ border_box, bn, f6, f5_l, input_reset, fl, black_80, bg_white, pa3, lh_solid, w_100, w_75_m, w_80_l, br2_ns, br__left_ns ], id "machineId", value machineId, onInput OnMachineIdInput ] []
+                    , input [ type_ "submit", classes [ f6, f5_l, button_reset, fl, pv3, tc, bn, bg_animate, bg_black_70, hover_bg_black, white, pointer, w_100, w_25_m, w_20_l, br2_ns, br__right_ns ] ] [ text "Montrer la machine" ]
                     ]
                 ]
             ]
@@ -437,7 +459,23 @@ viewCodeTypingScreen askCodeModel =
 viewMachineNotFoundScreen : String -> Html Msg
 viewMachineNotFoundScreen machineIdString =
     div []
-        [ "Machine " ++ machineIdString ++ " not found" |> text
+        [ "La machine " ++ machineIdString ++ " n'a pas été trouvée, êtes-vous sûr d'avoir entré le bon identifiant ?" |> text
+        , backToMainScreenButton
+        ]
+
+
+viewMachineMissingDependenciesScreen : Int -> Html Msg
+viewMachineMissingDependenciesScreen machineId =
+    div []
+        [ p [ classes [ mb3 ] ] [ "Vous ne pouvez pas encore utiliser la machine " ++ toString machineId ++ ", peut-être avez-vous d'autres choses à faire avant..." |> text ]
+        , backToMainScreenButton
+        ]
+
+
+viewCodeMissingDependenciesScreen : Html Msg
+viewCodeMissingDependenciesScreen =
+    div []
+        [ p [ classes [ mb3 ] ] [ "Ce code semble correct, mais vous ne pouvez pas encore l'utiliser ; vous avez peut-être d'autres choses à faire avant..." |> text ]
         , backToMainScreenButton
         ]
 
@@ -473,20 +511,59 @@ backToMainScreenButton =
         ]
 
 
-findCodeIdInElements : ScenarioElements -> String -> Maybe Int
+findCodeIdInElements : ScenarioElements -> String -> Maybe ( Int, DependenciesState )
 findCodeIdInElements scenarioElements code =
-    Graph.nodes scenarioElements
-        |> List.filter (.label >> .element >> (==) (Code code))
-        |> List.head
-        |> Maybe.map .id
+    let
+        nodeMaybe =
+            Graph.nodes scenarioElements
+                |> List.filter (.label >> .element >> (==) (Code code))
+                |> List.head
+    in
+        nodeMaybe
+            |> Maybe.map (\node -> ( node.id, getDependenciesState scenarioElements node.id |> Maybe.withDefault AllDone ))
 
 
-getMachineFromId : ScenarioElements -> Int -> Maybe ( Int, Machine.Model )
+getMachineFromId : ScenarioElements -> Int -> Maybe ( Int, Machine.Model, DependenciesState )
 getMachineFromId scenarioElements machineId =
-    Graph.get machineId scenarioElements
-        |> Maybe.map (.node >> .label)
-        |> Maybe.andThen extractMachine
-        |> Maybe.map (\machine -> ( machineId, machine ))
+    case Graph.get machineId scenarioElements of
+        Just nodeContext ->
+            let
+                dependenciesState =
+                    getNodeContextDependenciesState scenarioElements nodeContext
+            in
+                nodeContext.node.label
+                    |> extractMachine
+                    |> Maybe.map (\machine -> ( machineId, machine, dependenciesState ))
+
+        Nothing ->
+            Nothing
+
+
+getDependenciesState : ScenarioElements -> Int -> Maybe DependenciesState
+getDependenciesState scenarioElements elementId =
+    Graph.get elementId scenarioElements
+        |> Maybe.map (getNodeContextDependenciesState scenarioElements)
+
+
+getNodeContextDependenciesState : ScenarioElements -> NodeContext ScenarioElement () -> DependenciesState
+getNodeContextDependenciesState scenarioElements nodeContext =
+    let
+        hasAnyDependencyNotDone =
+            IntDict.toList nodeContext.incoming
+                |> List.map Tuple.first
+                |> List.map (getElementState scenarioElements >> Maybe.withDefault Done)
+                |> List.any (\state -> state /= Done)
+    in
+        if hasAnyDependencyNotDone then
+            AtLeastOneRemaining
+        else
+            AllDone
+
+
+getElementState : ScenarioElements -> Int -> Maybe ElementState
+getElementState scenarioElements elementId =
+    Graph.get elementId scenarioElements
+        |> Maybe.map (.node >> .label >> .state)
 
 
 extractMachine : ScenarioElement -> Maybe Machine.Model
@@ -499,7 +576,7 @@ extractMachine scenarioElement =
             Nothing
 
 
-subscriptions : Model msg -> Sub Msg
+subscriptions : Model -> Sub Msg
 subscriptions model =
     if model.state == Running then
         Timer.subscriptions model.timer

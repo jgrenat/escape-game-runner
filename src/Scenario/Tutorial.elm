@@ -5,7 +5,7 @@ import Code.Code as Code
 import Graph exposing (Edge, Graph, Node)
 import Machine.Machine as Machine
 import Machine.SimpleElectricalPanel exposing (Plug(BottomCenter, TopCenter))
-import Scenario.Scenario exposing (Element(Code, Machine), ElementState(ToDo), FinalState(Final, NotFinal), Reward(Modifier, Time), ScenarioData, ScenarioElement)
+import Scenario.Scenario exposing (Element(Code, Machine), ElementState(Done, ToDo), FinalState(Final, NotFinal), Reward(Modifier, Time), ScenarioData, ScenarioElement)
 import Time exposing (minute, second)
 import Timer.Timer as Timer exposing (Timer)
 
@@ -25,7 +25,7 @@ code : ScenarioElement
 code =
     "9372"
         |> Code
-        |> ScenarioElement ToDo Final [] "Congrats, you've won!"
+        |> ScenarioElement ToDo Final [] "Bravo, vous avez gagné !"
 
 
 scenarioElementsNodes : List (Node ScenarioElement)
@@ -43,7 +43,7 @@ scenarioElements =
     Graph.fromNodesAndEdges scenarioElementsNodes scenarioElementsEdges
 
 
-scenarioTimer : Timer Msg
+scenarioTimer : Timer
 scenarioTimer =
     Timer.init (10 * minute)
 
@@ -56,6 +56,6 @@ penaltyOnFailedAttempt failedAttempts =
         30 * second |> RemoveTime
 
 
-scenarioData : ScenarioData Msg
+scenarioData : ScenarioData
 scenarioData =
     ScenarioData "Tutorial" scenarioElements scenarioTimer penaltyOnFailedAttempt

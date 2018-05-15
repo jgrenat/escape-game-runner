@@ -4,7 +4,7 @@ import Html exposing (Html, button, div, h1, img, p, text)
 import Html.Events exposing (onClick)
 import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
 import Tachyons exposing (classes, tachyons)
-import Tachyons.Classes exposing (center, f5, f_headline, f_subheadline, lh_solid, mw6, sans_serif, serif, tl)
+import Tachyons.Classes exposing (center, f5, f_headline, f_subheadline, lh_solid, mw6, ph2, sans_serif)
 import Scenario.Scenario as Scenario exposing (State(NotStarted))
 import Scenario.Tutorial exposing (scenarioData)
 
@@ -13,7 +13,7 @@ import Scenario.Tutorial exposing (scenarioData)
 
 
 type alias Model =
-    { scenario : Scenario.Model Scenario.Tutorial.Msg }
+    { scenario : Scenario.Model }
 
 
 init : ( Model, Cmd Msg )
@@ -50,7 +50,7 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div [ classes [ mw6, center, sans_serif, f5 ] ]
+    div [ classes [ mw6, center, sans_serif, f5, ph2 ] ]
         [ tachyons.css
         , h1 [ classes [ f_subheadline, lh_solid ] ] [ text "Unlock" ]
         , if model.scenario.state == NotStarted then

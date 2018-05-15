@@ -2,7 +2,6 @@ module Machine.SimpleElectricalPanel exposing (Model, Msg, init, view, update, P
 
 import Attempt exposing (AttemptStatus(Correct, Incorrect))
 import Html exposing (Html, button, div, p, text)
-import Html.Attributes
 import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
 import Svg exposing (Svg, circle, line, rect, svg)
 import Svg.Attributes exposing (class, cx, cy, fill, height, r, rx, ry, stroke, strokeWidth, viewBox, width, x, x1, x2, y, y1, y2)

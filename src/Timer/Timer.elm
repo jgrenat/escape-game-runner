@@ -1,6 +1,5 @@
-module Timer.Timer exposing (init, start, Timer, toString, subscriptions, Msg, update, State(..), pause, state, substractTime, addEvent)
+module Timer.Timer exposing (init, start, Timer, toString, subscriptions, Msg, update, State(..), pause, state, substractTime)
 
-import Task
 import Time exposing (Time, millisecond)
 
 
@@ -8,9 +7,9 @@ type Msg
     = Tick
 
 
-type alias Timer msg =
-    { events : List ( Time, msg )
-    , state : State
+type alias Timer =
+    { state : State
+    , elapsed : Time
     , remaining : Time
     }
 
@@ -21,17 +20,23 @@ type State
     | Done
 
 
+type alias TimerStatus =
+    { elapsed : Time
+    , remaining : Time
+    }
+
+
 timerStep : Time
 timerStep =
     100 * millisecond
 
 
-init : Time -> Timer msg
+init : Time -> Timer
 init time =
-    Timer [] Paused time
+    Timer Paused 0 time
 
 
-update : Msg -> Timer msg -> ( Timer msg, List msg )
+update : Msg -> Timer -> ( Timer, TimerStatus )
 update message timer =
     case message of
         Tick ->
@@ -41,24 +46,18 @@ update message timer =
                         tickTimer timer
                     else
                         timer
-
-                timeHasPassed =
-                    (Tuple.first >> (<=) timer.remaining)
-
-                eventsToApply =
-                    List.filter timeHasPassed timer.events
-
-                remainingEvents =
-                    List.filter (timeHasPassed >> not) timer.events
             in
-                ( { newTimer | events = remainingEvents }, eventsToApply |> List.map Tuple.second )
+                ( newTimer, TimerStatus newTimer.elapsed newTimer.remaining )
 
 
-tickTimer : Timer msg -> Timer msg
+tickTimer : Timer -> Timer
 tickTimer timer =
     let
         remaining =
             timer.remaining - timerStep |> max 0
+
+        elapsed =
+            timer.elapsed + timerStep
 
         newState =
             if remaining <= 0 then
@@ -66,10 +65,10 @@ tickTimer timer =
             else
                 Running
     in
-        { timer | remaining = remaining, state = newState }
+        { timer | remaining = remaining, elapsed = elapsed, state = newState }
 
 
-start : Timer msg -> Timer msg
+start : Timer -> Timer
 start model =
     if model.state == Paused then
         { model | state = Running }
@@ -77,7 +76,7 @@ start model =
         model
 
 
-pause : Timer msg -> Timer msg
+pause : Timer -> Timer
 pause model =
     if model.state == Running then
         { model | state = Paused }
@@ -85,17 +84,17 @@ pause model =
         model
 
 
-state : Timer msg -> State
+state : Timer -> State
 state timer =
     timer.state
 
 
-substractTime : Timer msg -> Time -> Timer msg
+substractTime : Timer -> Time -> Timer
 substractTime timer time =
     { timer | remaining = timer.remaining - time |> max 0 }
 
 
-toString : Timer msg -> String
+toString : Timer -> String
 toString timer =
     let
         inMinutes =
@@ -133,7 +132,7 @@ toString timer =
         inMinutesString ++ inSecondsString
 
 
-subscriptions : Timer msg -> Sub Msg
+subscriptions : Timer -> Sub Msg
 subscriptions timer =
     case timer.state of
         Running ->
@@ -141,14 +140,3 @@ subscriptions timer =
 
         _ ->
             Sub.none
-
-
-addEvent : ( Time, msg ) -> Timer msg -> Timer msg
-addEvent event timer =
-    { timer | events = event :: timer.events }
-
-
-sendMsg : msg -> Cmd msg
-sendMsg msg =
-    Task.succeed msg
-        |> Task.perform identity
