@@ -1,0 +1,17 @@
+
+
+
+/*Pipe Tiles*/
+
+.water-puzzle {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: center;
+}
+
+.pipe-tile {
+    height: 100px;
+    width: 100px;
+}

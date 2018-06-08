@@ -5,6 +5,7 @@ import Code.Code as Code
 import Graph exposing (Edge, Graph, Node)
 import Machine.Machine as Machine
 import Machine.SimpleElectricalPanel exposing (Plug(BottomCenter, TopCenter))
+import Machine.WaterPipePuzzle exposing (Direction(Bottom, Left, Right, Top), OpeningType(Entrance, Exit), Option(NotRotatable), Pipe(..))
 import Scenario.Scenario exposing (Element(Code, Machine), ElementState(Done, ToDo), FinalState(Final, NotFinal), Reward(Modifier, Time), ScenarioData, ScenarioElement)
 import Time exposing (minute, second)
 import Timer.Timer as Timer exposing (Timer)
@@ -21,6 +22,18 @@ machine =
         |> ScenarioElement ToDo NotFinal [ Modifier 9 ] "Bravo, additionnez ce numéro avec un autre numéro !"
 
 
+waterPipeMachine : ScenarioElement
+waterPipeMachine =
+    [ [ ( Opening Right Entrance, [ NotRotatable ] ), ( LeftT, [] ), ( TopRightConnector, [] ), ( LeftRightConnector, [] ) ]
+    , [ ( BottomRightConnector, [] ), ( TopBottomConnector, [] ), ( LeftRightConnector, [] ), ( LeftRightConnector, [] ) ]
+    , [ ( BottomRightConnector, [] ), ( TopT, [] ), ( LeftT, [] ), ( LeftRightConnector, [] ) ]
+    , [ ( BottomRightConnector, [] ), ( TopRightConnector, [] ), ( LeftT, [] ), ( Opening Left Exit, [] ) ]
+    ]
+        |> Machine.waterPipePuzzle "test"
+        |> Machine
+        |> ScenarioElement ToDo NotFinal [ Modifier 9 ] "Bravo, additionnez ce numéro avec un autre numéro !"
+
+
 code : ScenarioElement
 code =
     "9372"
@@ -30,7 +43,7 @@ code =
 
 scenarioElementsNodes : List (Node ScenarioElement)
 scenarioElementsNodes =
-    [ Node 69 machine, Node 48 code ]
+    [ Node 69 machine, Node 48 code, Node 1 waterPipeMachine ]
 
 
 scenarioElementsEdges : List (Edge ())
