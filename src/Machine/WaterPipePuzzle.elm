@@ -7,8 +7,9 @@ import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
 import Svg exposing (Svg, line, polygon, svg)
 import Svg.Attributes exposing (class, fill, height, points, stroke, strokeLinejoin, strokeWidth, viewBox, width, x1, x2, y1, y2)
 import Tachyons exposing (classes)
-import Tachyons.Classes exposing (mt3, pointer)
+import Tachyons.Classes exposing (mt3, overflow_x_auto, pointer)
 import Attempt exposing (AttemptStatus(..))
+import Html.Attributes exposing (style)
 
 
 type Pipe
@@ -367,10 +368,16 @@ viewControls =
 
 viewBoard : Model -> Html Msg
 viewBoard model =
-    Matrix.mapWithLocation (,) model.gameBoard
-        |> Matrix.toList
-        |> List.concatMap (List.map viewPipe)
-        |> div [ classes [ "water-puzzle" ] ]
+    let
+        columnsStyle =
+            Matrix.colCount model.gameBoard
+                |> (\count -> String.repeat count "1fr ")
+                |> String.trimRight
+    in
+        Matrix.mapWithLocation (,) model.gameBoard
+            |> Matrix.toList
+            |> List.concatMap (List.map viewPipe)
+            |> div [ classes [ "water-puzzle" ], style [ ( "grid-template-columns", columnsStyle ) ] ]
 
 
 toPolygon : String -> Svg Msg
@@ -448,8 +455,9 @@ viewPipe ( location, ( pipe, options ) ) =
                 [ onClick (Rotate location), class ("pipe-tile " ++ pointer) ]
     in
         [ viewBox "0 0 300 300", strokeWidth "3" ]
-            |> List.append onClickAttributes
             |> (\attributes -> svg attributes svgElements)
+            |> List.singleton
+            |> div (onClickAttributes)
 
 
 viewOpening : Direction -> OpeningType -> List (Svg Msg)
