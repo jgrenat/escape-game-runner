@@ -1,4 +1,4 @@
-module Code.Code exposing (Model, Msg, init, update, askCodeView)
+module Code.Code exposing (Model, Msg, askCodeView, init, update)
 
 import Char exposing (isDigit)
 import Html exposing (Html, button, div, fieldset, form, input, label, legend, p, text)
@@ -27,7 +27,7 @@ update msg model =
                 onlyDigits =
                     String.filter isDigit newCode
             in
-                ( { model | codeInput = onlyDigits }, Nothing )
+            ( { model | codeInput = onlyDigits }, Nothing )
 
         CodeAttempt ->
             ( model, Just model.codeInput )

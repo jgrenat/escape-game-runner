@@ -1,15 +1,16 @@
-module Machine.WaterPipePuzzle exposing (Pipe(..), Model, Msg, init, update, view, PipeWithOptions, GameBoard, Option(..), OpeningType(..), Direction(..))
+module Machine.WaterPipePuzzle exposing (Direction(..), GameBoard, Model, Msg, OpeningType(..), Option(..), Pipe(..), PipeWithOptions, init, update, view)
 
-import Html exposing (Html, beginnerProgram, button, div, i, img, text)
-import Html.Events exposing (onClick)
-import Matrix exposing (Location, Matrix, col, loc, row)
-import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
-import Svg exposing (Svg, line, polygon, svg)
-import Svg.Attributes exposing (class, fill, height, points, stroke, strokeLinejoin, strokeWidth, viewBox, width, x1, x2, y1, y2)
-import Tachyons exposing (classes)
-import Tachyons.Classes exposing (mt3, overflow_x_auto, pointer)
+import Array
 import Attempt exposing (AttemptStatus(..))
+import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (style)
+import Html.Events exposing (onClick)
+import Matrix exposing (Matrix)
+import Styles.Styles exposing (validateButtonClasses)
+import Svg exposing (Svg, line, polygon, svg)
+import Svg.Attributes exposing (class, fill, points, stroke, strokeWidth, viewBox, x1, x2, y1, y2)
+import Tachyons exposing (classes)
+import Tachyons.Classes exposing (mt3, pointer)
 
 
 type Pipe
@@ -67,14 +68,33 @@ type WaterState
     | NotVisited
 
 
+type alias Location =
+    { row : Int
+    , column : Int
+    }
+
+
 type Msg
     = Rotate Location
     | Attempt
 
 
-init : List (List ( Pipe, List Option )) -> Model
+init : List (List ( Pipe, List Option )) -> Maybe Model
 init pipesWithOptions =
-    Matrix.fromList pipesWithOptions |> Model
+    case pipesWithOptions of
+        [] ->
+            Nothing
+
+        first :: _ ->
+            let
+                pipesArray =
+                    List.map Array.fromList pipesWithOptions
+                        |> Array.fromList
+            in
+            Matrix.generate (List.length pipesWithOptions) (List.length first) (\row column -> Array.get column pipesArray |> Maybe.andThen (Array.get row))
+                |> Matrix.map (Maybe.withDefault ( Connector4, [] ))
+                |> Model
+                |> Just
 
 
 update : Msg -> Model -> ( Model, Maybe AttemptStatus )
@@ -83,22 +103,24 @@ update msg model =
         Rotate location ->
             let
                 updatedBoard =
-                    Matrix.get location model.gameBoard
+                    Matrix.get location.column location.row model.gameBoard
+                        |> Result.toMaybe
                         |> Maybe.map rotateRightPipe
-                        |> Maybe.map (\rotatedPipe -> Matrix.set location rotatedPipe model.gameBoard)
+                        |> Maybe.map (\rotatedPipe -> Matrix.set location.column location.row rotatedPipe model.gameBoard)
                         |> Maybe.withDefault model.gameBoard
             in
-                ( { model | gameBoard = updatedBoard }, Nothing )
+            ( { model | gameBoard = updatedBoard }, Nothing )
 
         Attempt ->
             let
                 waterOut =
                     checkWaterOutAndNotFlooded model.gameBoard
             in
-                if waterOut then
-                    ( model, Just Correct )
-                else
-                    ( model, Just Incorrect )
+            if waterOut then
+                ( model, Just Correct )
+
+            else
+                ( model, Just Incorrect )
 
 
 checkWaterOutAndNotFlooded : GameBoard -> Bool
@@ -110,20 +132,20 @@ checkWaterOutAndNotFlooded gameBoard =
 
         resultingPipesStates =
             getEntrances gameBoard
-                |> List.foldl propagateWaterIntoPipe wateredGameBoard
-                |> Matrix.toList
-                |> List.concat
+                |> List.foldl propagateWaterIntoPipe2 wateredGameBoard
+                >> Matrix.toArray
+                |> Array.toList
                 |> List.map Tuple.second
     in
-        (not <| List.member Flooded resultingPipesStates)
-            && List.member Out resultingPipesStates
+    (not <| List.member Flooded resultingPipesStates)
+        && List.member Out resultingPipesStates
 
 
 getEntrances : GameBoard -> List ( Location, Direction )
 getEntrances gameBoard =
-    Matrix.mapWithLocation (\location ( pipe, _ ) -> ( location, pipe )) gameBoard
-        |> Matrix.toList
-        |> List.concat
+    Matrix.indexedMap (\column row ( pipe, _ ) -> ( Location row column, pipe )) gameBoard
+        |> Matrix.toArray
+        |> Array.toList
         |> List.filterMap
             (\( location, pipe ) ->
                 case pipe of
@@ -135,25 +157,24 @@ getEntrances gameBoard =
             )
 
 
-markPipeAsVisited : WateredGameBoard -> Location -> WateredGameBoard
-markPipeAsVisited wateredGameBoard location =
-    wateredGameBoard
-        |> Matrix.update location
-            (\( pipe, waterState ) ->
-                case waterState of
-                    NotVisited ->
-                        ( pipe, NothingSpecial )
+updateCell : Location -> (a -> a) -> Matrix a -> Matrix a
+updateCell location mapFunction matrix =
+    Matrix.indexedMap
+        (\column row value ->
+            if row == location.row && column == location.column then
+                mapFunction value
 
-                    status ->
-                        ( pipe, status )
-            )
+            else
+                value
+        )
+        matrix
 
 
-propagateWaterIntoPipe : ( Location, Direction ) -> WateredGameBoard -> WateredGameBoard
-propagateWaterIntoPipe ( location, direction ) wateredBoard =
-    case Matrix.get location wateredBoard of
-        Just ( pipe, state ) ->
-            if not <| (isAccessibleBy direction pipe) then
+propagateWaterIntoPipe2 : ( Location, Direction ) -> WateredGameBoard -> WateredGameBoard
+propagateWaterIntoPipe2 ( location, direction ) wateredBoard =
+    case Matrix.get location.column location.row wateredBoard of
+        Ok ( pipe, state ) ->
+            if not <| isAccessibleBy direction pipe then
                 let
                     previousLocation =
                         case direction of
@@ -169,27 +190,28 @@ propagateWaterIntoPipe ( location, direction ) wateredBoard =
                             Right ->
                                 toRight location |> Tuple.first
                 in
-                    Matrix.update previousLocation (\( pipe, _ ) -> ( pipe, Flooded )) wateredBoard
+                updateCell previousLocation (\( currentPipe, _ ) -> ( currentPipe, Flooded )) wateredBoard
+
             else
                 case ( pipe, state ) of
                     ( Opening _ Exit, NotVisited ) ->
-                        Matrix.update location (\( pipe, _ ) -> ( pipe, Out )) wateredBoard
+                        updateCell location (\( currentPipe, _ ) -> ( currentPipe, Out )) wateredBoard
 
-                    ( pipe, NotVisited ) ->
+                    ( currentPipe, NotVisited ) ->
                         let
                             newWateredBoard =
-                                Matrix.update location (\_ -> ( pipe, NothingSpecial )) wateredBoard
+                                updateCell location (\_ -> ( currentPipe, NothingSpecial )) wateredBoard
 
                             exits : List ( Location, Direction )
                             exits =
-                                getPipeExits location pipe
+                                getPipeExits location currentPipe
                         in
-                            List.foldl propagateWaterIntoPipe newWateredBoard exits
+                        List.foldl propagateWaterIntoPipe2 newWateredBoard exits
 
-                    ( pipe, _ ) ->
+                    _ ->
                         wateredBoard
 
-        Nothing ->
+        Err _ ->
             let
                 previousLocation =
                     case direction of
@@ -205,14 +227,14 @@ propagateWaterIntoPipe ( location, direction ) wateredBoard =
                         Right ->
                             toRight location |> Tuple.first
             in
-                Matrix.update previousLocation (\( pipe, _ ) -> ( pipe, Flooded )) wateredBoard
+            updateCell previousLocation (\( pipe, _ ) -> ( pipe, Flooded )) wateredBoard
 
 
 isAccessibleBy : Direction -> Pipe -> Bool
 isAccessibleBy direction pipe =
     let
         exits =
-            getPipeExits (loc 0 0) pipe |> List.map Tuple.second
+            getPipeExits (Location 0 0) pipe |> List.map Tuple.second
 
         expectedDirection =
             case direction of
@@ -228,7 +250,7 @@ isAccessibleBy direction pipe =
                 Left ->
                     Right
     in
-        List.member expectedDirection exits
+    List.member expectedDirection exits
 
 
 getPipeExits : Location -> Pipe -> List ( Location, Direction )
@@ -282,22 +304,22 @@ getPipeExits location pipe =
 
 toTop : Location -> ( Location, Direction )
 toTop location =
-    ( loc (row location - 1) (col location), Bottom )
+    ( Location (location.row - 1) location.column, Bottom )
 
 
 toRight : Location -> ( Location, Direction )
 toRight location =
-    ( loc (row location) (col location + 1), Left )
+    ( Location location.row (location.column + 1), Left )
 
 
 toBottom : Location -> ( Location, Direction )
 toBottom location =
-    ( loc (row location + 1) (col location), Top )
+    ( Location (location.row + 1) location.column, Top )
 
 
 toLeft : Location -> ( Location, Direction )
 toLeft location =
-    ( loc (row location) (col location - 1), Right )
+    ( Location location.row (location.column - 1), Right )
 
 
 rotateRightPipe : ( Pipe, List Option ) -> ( Pipe, List Option )
@@ -370,14 +392,15 @@ viewBoard : Model -> Html Msg
 viewBoard model =
     let
         columnsStyle =
-            Matrix.colCount model.gameBoard
+            Matrix.width model.gameBoard
                 |> (\count -> String.repeat count "1fr ")
                 |> String.trimRight
     in
-        Matrix.mapWithLocation (,) model.gameBoard
-            |> Matrix.toList
-            |> List.concatMap (List.map viewPipe)
-            |> div [ classes [ "water-puzzle" ], style [ ( "grid-template-columns", columnsStyle ) ] ]
+    Matrix.indexedMap (\column row value -> ( Location row column, value )) model.gameBoard
+        |> Matrix.toArray
+        |> Array.toList
+        |> List.map viewPipe
+        |> div [ classes [ "water-puzzle" ], style "grid-template-columns" columnsStyle ]
 
 
 toPolygon : String -> Svg Msg
@@ -449,15 +472,16 @@ viewPipe ( location, ( pipe, options ) ) =
                         |> List.singleton
 
         onClickAttributes =
-            if (List.member NotRotatable options) then
+            if List.member NotRotatable options then
                 [ class "pipe-tile" ]
+
             else
                 [ onClick (Rotate location), class ("pipe-tile " ++ pointer) ]
     in
-        [ viewBox "0 0 300 300", strokeWidth "3" ]
-            |> (\attributes -> svg attributes svgElements)
-            |> List.singleton
-            |> div (onClickAttributes)
+    [ viewBox "0 0 300 300", strokeWidth "3" ]
+        |> (\attributes -> svg attributes svgElements)
+        |> List.singleton
+        |> div onClickAttributes
 
 
 viewOpening : Direction -> OpeningType -> List (Svg Msg)
@@ -477,8 +501,8 @@ viewOpening direction openingType =
                 Left ->
                     "-5,100 130,100 130,80 150,80 150,220 130,220 130,200 -5,200"
     in
-        viewArrow openingType direction
-            |> List.append (toPolygon polygonPoints |> List.singleton)
+    viewArrow openingType direction
+        |> List.append (toPolygon polygonPoints |> List.singleton)
 
 
 viewArrow : OpeningType -> Direction -> List (Svg Msg)

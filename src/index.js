@@ -1,8 +1,0 @@
-import './main.css';
-import '../public/pipes.css';
-import { Main } from './Main.elm';
-import registerServiceWorker from './registerServiceWorker';
-
-Main.embed(document.getElementById('root'));
-
-registerServiceWorker();

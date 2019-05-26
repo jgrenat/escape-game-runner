@@ -1,9 +1,9 @@
-module Machine.Machine exposing (Model, Msg, simpleElectricalPanel, waterPipePuzzle, view, update)
+module Machine.Machine exposing (Model, Msg, simpleElectricalPanel, update, view, waterPipePuzzle)
 
+import Attempt exposing (AttemptStatus)
 import Html exposing (Html)
 import Machine.SimpleElectricalPanel as SimpleElectricalPanel exposing (Plug)
 import Machine.WaterPipePuzzle as WaterPipePuzzle exposing (Pipe, PipeWithOptions)
-import Attempt exposing (AttemptStatus)
 
 
 type Model
@@ -37,19 +37,19 @@ simpleElectricalPanel text expectedPlugs =
         |> SimpleElectricalPanelMachine
 
 
-waterPipePuzzle : String -> List (List PipeWithOptions) -> Model
-waterPipePuzzle text pipes =
+waterPipePuzzle : String -> List (List PipeWithOptions) -> Maybe Model
+waterPipePuzzle _ pipes =
     WaterPipePuzzle.init pipes
-        |> WaterPipePuzzleMachine
+        |> Maybe.map WaterPipePuzzleMachine
 
 
 view : Int -> Model -> Html Msg
-view machineId machine =
+view _ machine =
     case machine of
-        SimpleElectricalPanelMachine simpleElectricalPanel ->
-            SimpleElectricalPanel.view simpleElectricalPanel
+        SimpleElectricalPanelMachine simpleElectricalPanelModel ->
+            SimpleElectricalPanel.view simpleElectricalPanelModel
                 |> Html.map SimpleElectricalPanelMsg
 
-        WaterPipePuzzleMachine waterPipePuzzle ->
-            WaterPipePuzzle.view waterPipePuzzle
+        WaterPipePuzzleMachine waterPipePuzzleModel ->
+            WaterPipePuzzle.view waterPipePuzzleModel
                 |> Html.map WaterPipePuzzleMsg

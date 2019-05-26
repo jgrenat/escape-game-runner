@@ -1,6 +1,6 @@
-module Attempt exposing (AttemptStatus(..), AttemptPenalty(..))
+module Attempt exposing (AttemptPenalty(..), AttemptStatus(..))
 
-import Time exposing (Time)
+import Timer.Timer exposing (Milliseconds)
 
 
 type AttemptStatus
@@ -9,4 +9,4 @@ type AttemptStatus
 
 
 type AttemptPenalty
-    = RemoveTime Time
+    = RemoveTime Milliseconds

@@ -1,26 +1,25 @@
-module Scenario.Scenario
-    exposing
-        ( Model
-        , ScenarioElement
-        , fromScenarioData
-        , ScenarioData
-        , ElementState(..)
-        , Element(..)
-        , FinalState(..)
-        , Reward(..)
-        , State(..)
-        , start
-        , view
-        , Msg
-        , subscriptions
-        , update
-        )
+module Scenario.Scenario exposing
+    ( Element(..)
+    , ElementState(..)
+    , FinalState(..)
+    , Model
+    , Msg
+    , Reward(..)
+    , ScenarioData
+    , ScenarioElement
+    , State(..)
+    , fromScenarioData
+    , start
+    , subscriptions
+    , update
+    , view
+    )
 
-import Attempt exposing (AttemptPenalty(RemoveTime), AttemptStatus(Correct, Incorrect))
+import Attempt exposing (AttemptPenalty(..), AttemptStatus(..))
 import Code.Code as Code
 import FeatherIcons
 import Graph exposing (Edge, Graph, Node, NodeContext)
-import Html exposing (Html, button, div, fieldset, form, form, h2, input, label, legend, p, span, text)
+import Html exposing (Html, button, div, fieldset, form, h2, input, label, legend, p, text)
 import Html.Attributes exposing (autocomplete, autofocus, for, id, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
 import IntDict
@@ -29,7 +28,7 @@ import Styles.Styles exposing (defaultButtonClasses)
 import Svg.Attributes exposing (height)
 import Tachyons exposing (classes)
 import Tachyons.Classes exposing (b__black_10, ba, bg_animate, bg_black_70, bg_blue, bg_green, bg_white, black_80, bn, border_box, br2_ns, br__left_ns, br__right_ns, button_reset, center, cf, clip, f2, f3, f4_ns, f5, f5_l, f6, fl, flex, h1, h3, hover_bg_black, input_reset, items_center, justify_center, lh_solid, lh_title, ma0, mb3, mb5, mw7, pa0, pa3, pa4, pointer, pv3, tc, tl, w1, w2, w3, w4, w_100, w_20_l, w_25_m, w_60_m, w_70_l, w_75_m, w_80_l, white)
-import Time exposing (Time)
+import Time exposing (Posix, utc)
 import Timer.Timer as Timer exposing (Timer)
 
 
@@ -119,7 +118,7 @@ type alias ScenarioData =
 
 type Reward
     = Modifier Int
-    | Time Time
+    | Time Posix
 
 
 fromScenarioData : ScenarioData -> Model
@@ -135,10 +134,11 @@ update msg model =
                 ( newTimer, timerStatus ) =
                     Timer.update message model.timer
             in
-                if timerStatus.remaining <= 0 then
-                    { model | state = Lost, timer = newTimer }
-                else
-                    { model | timer = newTimer }
+            if timerStatus.remaining <= 0 then
+                { model | state = Lost, timer = newTimer }
+
+            else
+                { model | timer = newTimer }
 
         ( Running, Pause ) ->
             { model | state = Paused, timer = Timer.pause model.timer }
@@ -149,12 +149,14 @@ update msg model =
         ( Running, GoToMachineSelection ) ->
             if model.screen == MainScreen then
                 { model | screen = MachineSelectionScreen "" }
+
             else
                 model
 
         ( Running, GoToCodeTyping ) ->
             if model.screen == MainScreen then
                 { model | screen = CodeTypingScreen Code.init }
+
             else
                 model
 
@@ -184,18 +186,18 @@ update msg model =
             let
                 machineMaybe =
                     String.toInt machineIdString
-                        |> Result.toMaybe
                         |> Maybe.andThen (getMachineFromId model.scenarioElements)
             in
-                case machineMaybe of
-                    Just ( machineId, machine, dependenciesState ) ->
-                        if dependenciesState == AtLeastOneRemaining then
-                            ({ model | screen = MachineMissingDependenciesScreen machineId })
-                        else
-                            ({ model | screen = MachineScreen machineId machine })
+            case machineMaybe of
+                Just ( machineId, machine, dependenciesState ) ->
+                    if dependenciesState == AtLeastOneRemaining then
+                        { model | screen = MachineMissingDependenciesScreen machineId }
 
-                    Nothing ->
-                        ({ model | screen = MachineNotFoundScreen machineIdString })
+                    else
+                        { model | screen = MachineScreen machineId machine }
+
+                Nothing ->
+                    { model | screen = MachineNotFoundScreen machineIdString }
 
         ( Running, OnMachineIdInput machineIdString ) ->
             case model.screen of
@@ -215,7 +217,7 @@ start model =
         startedTimer =
             Timer.start model.timer
     in
-        { model | state = Running, timer = startedTimer }
+    { model | state = Running, timer = startedTimer }
 
 
 resume : Model -> Model
@@ -224,10 +226,11 @@ resume model =
         startedTimer =
             Timer.start model.timer
     in
-        if model.state == NotStarted || model.state == Paused then
-            { model | state = Running, timer = startedTimer }
-        else
-            model
+    if model.state == NotStarted || model.state == Paused then
+        { model | state = Running, timer = startedTimer }
+
+    else
+        model
 
 
 updateMachine : Int -> Machine.Model -> Machine.Msg -> Model -> Model
@@ -236,51 +239,52 @@ updateMachine machineId machine message model =
         ( updatedMachine, attemptMaybe ) =
             Machine.update message machine
     in
-        case attemptMaybe of
-            Just Incorrect ->
-                let
-                    failedAttempts =
-                        model.failedAttempts + 1
+    case attemptMaybe of
+        Just Incorrect ->
+            let
+                failedAttempts =
+                    model.failedAttempts + 1
 
-                    penalty =
-                        model.penaltyOnFailedAttempt failedAttempts
+                penalty =
+                    model.penaltyOnFailedAttempt failedAttempts
 
-                    timer =
-                        case penalty of
-                            RemoveTime time ->
-                                Timer.substractTime model.timer time
-                in
-                    { model | screen = MachineScreen machineId updatedMachine, failedAttempts = failedAttempts, timer = timer }
+                timer =
+                    case penalty of
+                        RemoveTime time ->
+                            Timer.substractTime model.timer time
+            in
+            { model | screen = MachineScreen machineId updatedMachine, failedAttempts = failedAttempts, timer = timer }
 
-            Just Correct ->
-                let
-                    updatedScenarioElements =
-                        Graph.update machineId flagNodeContextAsDone model.scenarioElements
+        Just Correct ->
+            let
+                updatedScenarioElements =
+                    Graph.update machineId flagNodeContextAsDone model.scenarioElements
 
-                    updatedScenarioElementMaybe =
-                        Graph.get machineId updatedScenarioElements
-                            |> Maybe.map (.node >> .label)
+                updatedScenarioElementMaybe =
+                    Graph.get machineId updatedScenarioElements
+                        |> Maybe.map (.node >> .label)
 
-                    newScreen =
-                        updatedScenarioElementMaybe
-                            |> Maybe.map (ElementDoneScreen machineId)
-                            |> Maybe.withDefault MainScreen
+                newScreen =
+                    updatedScenarioElementMaybe
+                        |> Maybe.map (ElementDoneScreen machineId)
+                        |> Maybe.withDefault MainScreen
 
-                    finalState =
-                        updatedScenarioElementMaybe
-                            |> Maybe.map .finalState
-                            |> Maybe.withDefault NotFinal
+                finalState =
+                    updatedScenarioElementMaybe
+                        |> Maybe.map .finalState
+                        |> Maybe.withDefault NotFinal
 
-                    scenarioState =
-                        if finalState == Final then
-                            Won
-                        else
-                            model.state
-                in
-                    { model | screen = newScreen, scenarioElements = updatedScenarioElements, state = scenarioState }
+                scenarioState =
+                    if finalState == Final then
+                        Won
 
-            Nothing ->
-                { model | screen = MachineScreen machineId updatedMachine }
+                    else
+                        model.state
+            in
+            { model | screen = newScreen, scenarioElements = updatedScenarioElements, state = scenarioState }
+
+        Nothing ->
+            { model | screen = MachineScreen machineId updatedMachine }
 
 
 updateCode : Code.Model -> Code.Msg -> Model -> Model
@@ -292,51 +296,52 @@ updateCode codeModel codeMsg model =
         validCodeIdMaybe =
             codeMaybe |> Maybe.andThen (findCodeIdInElements model.scenarioElements)
     in
-        case ( codeMaybe, validCodeIdMaybe ) of
-            ( Just code, Just ( codeId, dependenciesState ) ) ->
-                let
-                    updatedScenarioElements =
-                        Graph.update codeId flagNodeContextAsDone model.scenarioElements
+    case ( codeMaybe, validCodeIdMaybe ) of
+        ( Just code, Just ( codeId, dependenciesState ) ) ->
+            let
+                updatedScenarioElements =
+                    Graph.update codeId flagNodeContextAsDone model.scenarioElements
 
-                    finalState =
-                        Graph.get codeId updatedScenarioElements
-                            |> Maybe.map (.node >> .label >> .finalState)
-                            |> Maybe.withDefault NotFinal
+                finalState =
+                    Graph.get codeId updatedScenarioElements
+                        |> Maybe.map (.node >> .label >> .finalState)
+                        |> Maybe.withDefault NotFinal
 
-                    scenarioState =
-                        if finalState == Final then
-                            Won
-                        else
-                            model.state
-                in
-                    case dependenciesState of
-                        AtLeastOneRemaining ->
-                            { model | screen = CodeMissingDependenciesScreen }
+                scenarioState =
+                    if finalState == Final then
+                        Won
 
-                        AllDone ->
-                            { model
-                                | screen = MainScreen
-                                , scenarioElements = updatedScenarioElements
-                                , state = scenarioState
-                            }
+                    else
+                        model.state
+            in
+            case dependenciesState of
+                AtLeastOneRemaining ->
+                    { model | screen = CodeMissingDependenciesScreen }
 
-            ( Just code, Nothing ) ->
-                let
-                    failedAttempts =
-                        model.failedAttempts + 1
-
-                    updatedTimer =
-                        model.penaltyOnFailedAttempt failedAttempts
-                            |> (\(RemoveTime time) -> Timer.substractTime model.timer time)
-                in
+                AllDone ->
                     { model
-                        | screen = CodeTypingScreen newCodeModel
-                        , failedAttempts = failedAttempts
-                        , timer = updatedTimer
+                        | screen = MainScreen
+                        , scenarioElements = updatedScenarioElements
+                        , state = scenarioState
                     }
 
-            _ ->
-                { model | screen = CodeTypingScreen newCodeModel }
+        ( Just code, Nothing ) ->
+            let
+                failedAttempts =
+                    model.failedAttempts + 1
+
+                updatedTimer =
+                    model.penaltyOnFailedAttempt failedAttempts
+                        |> (\(RemoveTime time) -> Timer.substractTime model.timer time)
+            in
+            { model
+                | screen = CodeTypingScreen newCodeModel
+                , failedAttempts = failedAttempts
+                , timer = updatedTimer
+            }
+
+        _ ->
+            { model | screen = CodeTypingScreen newCodeModel }
 
 
 view : Model -> Html Msg
@@ -467,7 +472,7 @@ viewMachineNotFoundScreen machineIdString =
 viewMachineMissingDependenciesScreen : Int -> Html Msg
 viewMachineMissingDependenciesScreen machineId =
     div []
-        [ p [ classes [ mb3 ] ] [ "Vous ne pouvez pas encore utiliser la machine " ++ toString machineId ++ ", peut-être avez-vous d'autres choses à faire avant..." |> text ]
+        [ p [ classes [ mb3 ] ] [ "Vous ne pouvez pas encore utiliser la machine " ++ String.fromInt machineId ++ ", peut-être avez-vous d'autres choses à faire avant..." |> text ]
         , backToMainScreenButton
         ]
 
@@ -486,22 +491,26 @@ viewElementDoneScreen elementId scenarioElement =
         rewardsView =
             List.map viewReward scenarioElement.rewards
     in
-        div []
-            [ p [ classes [ f3 ] ] [ text "Congrats!" ]
-            , p [] [ text scenarioElement.successText ]
-            , div [ classes [ mb3 ] ] rewardsView
-            , backToMainScreenButton
-            ]
+    div []
+        [ p [ classes [ f3 ] ] [ text "Congrats!" ]
+        , p [] [ text scenarioElement.successText ]
+        , div [ classes [ mb3 ] ] rewardsView
+        , backToMainScreenButton
+        ]
 
 
 viewReward : Reward -> Html Msg
 viewReward reward =
     case reward of
         Modifier value ->
-            div [ classes [ w3, h3, bg_blue, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ toString value |> text ]
+            div [ classes [ w3, h3, bg_blue, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ String.fromInt value |> text ]
 
         Time time ->
-            div [ classes [ w4, h3, bg_green, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ (toString (Time.inSeconds time)) ++ "s" |> text ]
+            div [ classes [ w4, h3, bg_green, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ String.fromInt (Time.toSecond utc time) ++ "s" |> text ]
+
+
+
+-- TODO localeTimeZone
 
 
 backToMainScreenButton : Html Msg
@@ -519,8 +528,8 @@ findCodeIdInElements scenarioElements code =
                 |> List.filter (.label >> .element >> (==) (Code code))
                 |> List.head
     in
-        nodeMaybe
-            |> Maybe.map (\node -> ( node.id, getDependenciesState scenarioElements node.id |> Maybe.withDefault AllDone ))
+    nodeMaybe
+        |> Maybe.map (\node -> ( node.id, getDependenciesState scenarioElements node.id |> Maybe.withDefault AllDone ))
 
 
 getMachineFromId : ScenarioElements -> Int -> Maybe ( Int, Machine.Model, DependenciesState )
@@ -531,9 +540,9 @@ getMachineFromId scenarioElements machineId =
                 dependenciesState =
                     getNodeContextDependenciesState scenarioElements nodeContext
             in
-                nodeContext.node.label
-                    |> extractMachine
-                    |> Maybe.map (\machine -> ( machineId, machine, dependenciesState ))
+            nodeContext.node.label
+                |> extractMachine
+                |> Maybe.map (\machine -> ( machineId, machine, dependenciesState ))
 
         Nothing ->
             Nothing
@@ -554,10 +563,11 @@ getNodeContextDependenciesState scenarioElements nodeContext =
                 |> List.map (getElementState scenarioElements >> Maybe.withDefault Done)
                 |> List.any (\state -> state /= Done)
     in
-        if hasAnyDependencyNotDone then
-            AtLeastOneRemaining
-        else
-            AllDone
+    if hasAnyDependencyNotDone then
+        AtLeastOneRemaining
+
+    else
+        AllDone
 
 
 getElementState : ScenarioElements -> Int -> Maybe ElementState
@@ -581,5 +591,6 @@ subscriptions model =
     if model.state == Running then
         Timer.subscriptions model.timer
             |> Sub.map TimerMsg
+
     else
         Sub.none

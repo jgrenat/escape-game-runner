@@ -1,6 +1,6 @@
-module Machine.SimpleElectricalPanel exposing (Model, Msg, init, view, update, Plug(..))
+module Machine.SimpleElectricalPanel exposing (Model, Msg, Plug(..), init, update, view)
 
-import Attempt exposing (AttemptStatus(Correct, Incorrect))
+import Attempt exposing (AttemptStatus(..))
 import Html exposing (Html, button, div, p, text)
 import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
 import Svg exposing (Svg, circle, line, rect, svg)
@@ -52,6 +52,7 @@ update msg model =
                 Just selectedPlug ->
                     if model.selectedPlug == Just plug then
                         ( { model | selectedPlug = Nothing }, Nothing )
+
                     else
                         let
                             newLinks =
@@ -60,7 +61,7 @@ update msg model =
                                     |> List.filter ((/=) ( selectedPlug, plug ))
                                     |> List.append [ ( selectedPlug, plug ) ]
                         in
-                            ( { model | selectedPlug = Nothing, currentLinks = newLinks }, Nothing )
+                        ( { model | selectedPlug = Nothing, currentLinks = newLinks }, Nothing )
 
         Attempt ->
             let
@@ -70,10 +71,11 @@ update msg model =
                 attemptStatus =
                     if isValid then
                         Correct
+
                     else
                         Incorrect
             in
-                ( model, Just attemptStatus )
+            ( model, Just attemptStatus )
 
 
 areLinksValid : List ( Plug, Plug ) -> List ( Plug, Plug ) -> Bool
@@ -85,7 +87,7 @@ areLinksValid expectedLinks links =
         extraLinks =
             List.filter (doesNotContainLink expectedLinks) links
     in
-        List.isEmpty notContainedLinks && List.isEmpty extraLinks
+    List.isEmpty notContainedLinks && List.isEmpty extraLinks
 
 
 doesNotContainLink : List ( Plug, Plug ) -> ( Plug, Plug ) -> Bool
@@ -106,13 +108,13 @@ view model =
         machineBackground =
             rect [ x "5%", y "5%", width "90%", height "90%", rx "15", ry "15" ] []
     in
-        div []
-            [ svg
-                [ width "400", height "300", viewBox "0 0 300 250", fill "white", stroke "black", strokeWidth "3", class w_100 ]
-                (machineBackground :: (List.append plugs links))
-            , p [] [ text model.textToDisplay ]
-            , viewControls
-            ]
+    div []
+        [ svg
+            [ width "400", height "300", viewBox "0 0 300 250", fill "white", stroke "black", strokeWidth "3", class w_100 ]
+            (machineBackground :: List.append plugs links)
+        , p [] [ text model.textToDisplay ]
+        , viewControls
+        ]
 
 
 viewLinks : List ( Plug, Plug ) -> List (Svg Msg)
@@ -130,7 +132,7 @@ viewLink ( plug1, plug2 ) =
         ( px2, py2 ) =
             toStringCoordinates plug2
     in
-        line [ x1 px1, y1 py1, x2 px2, y2 py2, stroke "red", strokeWidth "5px" ] []
+    line [ x1 px1, y1 py1, x2 px2, y2 py2, stroke "red", strokeWidth "5px" ] []
 
 
 viewPlugs : Maybe Plug -> List (Svg Msg)
@@ -151,10 +153,11 @@ viewPlug selectedPlug plug =
         fillColor =
             if isSelected then
                 "yellow"
+
             else
                 "transparent"
     in
-        circle [ cx (toString x ++ "%"), cy (toString y ++ "%"), r "15", fill fillColor, onClick (OnPlugClicked plug), class pointer ] []
+    circle [ cx (String.fromInt x ++ "%"), cy (String.fromInt y ++ "%"), r "15", fill fillColor, onClick (OnPlugClicked plug), class pointer ] []
 
 
 viewControls : Html Msg
@@ -193,4 +196,4 @@ toStringCoordinates plug =
         ( x, y ) =
             getPlugCoordinates plug
     in
-        ( toString x ++ "%", toString y ++ "%" )
+    ( String.fromInt x ++ "%", String.fromInt y ++ "%" )

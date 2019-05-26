@@ -1,12 +1,15 @@
-module Main exposing (..)
+module Main exposing (Model, Msg(..), applyUpdate, applyUpdates, init, main, notStartedView, subscriptions, update, view)
 
-import Html exposing (Html, button, div, h1, img, p, text)
+import Browser exposing (Document)
+import Html exposing (Html, button, div, h1, p, text)
 import Html.Events exposing (onClick)
-import Styles.Styles exposing (defaultButtonClasses, validateButtonClasses)
-import Tachyons exposing (classes, tachyons)
-import Tachyons.Classes exposing (center, f5, f_headline, f_subheadline, lh_solid, mw6, ph2, sans_serif)
-import Scenario.Scenario as Scenario exposing (State(NotStarted))
+import Json.Decode exposing (Value)
+import Scenario.Scenario as Scenario exposing (State(..))
 import Scenario.Tutorial exposing (scenarioData)
+import Styles.Styles exposing (validateButtonClasses)
+import Tachyons exposing (classes, tachyons)
+import Tachyons.Classes exposing (center, f5, f_subheadline, lh_solid, mw6, ph2, sans_serif)
+
 
 
 ---- MODEL ----
@@ -16,8 +19,8 @@ type alias Model =
     { scenario : Scenario.Model }
 
 
-init : ( Model, Cmd Msg )
-init =
+init : Value -> ( Model, Cmd Msg )
+init _ =
     ( { scenario = Scenario.fromScenarioData scenarioData }, Cmd.none )
 
 
@@ -41,22 +44,25 @@ update msg model =
                 newScenario =
                     Scenario.update scenarioMsg model.scenario
             in
-                ( { model | scenario = newScenario }, Cmd.none )
+            ( { model | scenario = newScenario }, Cmd.none )
 
 
 
 ---- VIEW ----
 
 
-view : Model -> Html Msg
+view : Model -> Document Msg
 view model =
-    div [ classes [ mw6, center, sans_serif, f5, ph2 ] ]
-        [ tachyons.css
-        , h1 [ classes [ f_subheadline, lh_solid ] ] [ text "Unlock" ]
-        , if model.scenario.state == NotStarted then
-            notStartedView
-          else
-            Scenario.view model.scenario |> Html.map ScenarioMsg
+    Document "title"
+        [ div [ classes [ mw6, center, sans_serif, f5, ph2 ] ]
+            [ tachyons.css
+            , h1 [ classes [ f_subheadline, lh_solid ] ] [ text "Unlock" ]
+            , if model.scenario.state == NotStarted then
+                notStartedView
+
+              else
+                Scenario.view model.scenario |> Html.map ScenarioMsg
+            ]
         ]
 
 
@@ -81,9 +87,9 @@ subscriptions model =
 ---- PROGRAM ----
 
 
-main : Program Never Model Msg
+main : Program Value Model Msg
 main =
-    Html.program
+    Browser.document
         { view = view
         , init = init
         , update = update
@@ -106,7 +112,8 @@ applyUpdate msg ( currentModel, currentCommands ) =
         newCommands =
             if cmd == Cmd.none then
                 currentCommands
+
             else
                 cmd :: currentCommands
     in
-        ( newModel, newCommands )
+    ( newModel, newCommands )

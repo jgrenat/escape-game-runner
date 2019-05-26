@@ -1,6 +1,6 @@
-module Timer.Timer exposing (init, start, Timer, toString, subscriptions, Msg, update, State(..), pause, state, substractTime)
+module Timer.Timer exposing (Milliseconds, Msg, State(..), Timer, init, pause, start, state, subscriptions, substractTime, toString, update)
 
-import Time exposing (Time, millisecond)
+import Time
 
 
 type Msg
@@ -9,8 +9,8 @@ type Msg
 
 type alias Timer =
     { state : State
-    , elapsed : Time
-    , remaining : Time
+    , elapsed : Milliseconds
+    , remaining : Milliseconds
     }
 
 
@@ -20,18 +20,22 @@ type State
     | Done
 
 
+type alias Milliseconds =
+    Int
+
+
 type alias TimerStatus =
-    { elapsed : Time
-    , remaining : Time
+    { elapsed : Milliseconds
+    , remaining : Milliseconds
     }
 
 
-timerStep : Time
+timerStep : Milliseconds
 timerStep =
-    100 * millisecond
+    100
 
 
-init : Time -> Timer
+init : Milliseconds -> Timer
 init time =
     Timer Paused 0 time
 
@@ -44,10 +48,11 @@ update message timer =
                 newTimer =
                     if timer.state == Running then
                         tickTimer timer
+
                     else
                         timer
             in
-                ( newTimer, TimerStatus newTimer.elapsed newTimer.remaining )
+            ( newTimer, TimerStatus newTimer.elapsed newTimer.remaining )
 
 
 tickTimer : Timer -> Timer
@@ -62,16 +67,18 @@ tickTimer timer =
         newState =
             if remaining <= 0 then
                 Done
+
             else
                 Running
     in
-        { timer | remaining = remaining, elapsed = elapsed, state = newState }
+    { timer | remaining = remaining, elapsed = elapsed, state = newState }
 
 
 start : Timer -> Timer
 start model =
     if model.state == Paused then
         { model | state = Running }
+
     else
         model
 
@@ -80,6 +87,7 @@ pause : Timer -> Timer
 pause model =
     if model.state == Running then
         { model | state = Paused }
+
     else
         model
 
@@ -89,7 +97,7 @@ state timer =
     timer.state
 
 
-substractTime : Timer -> Time -> Timer
+substractTime : Timer -> Milliseconds -> Timer
 substractTime timer time =
     { timer | remaining = timer.remaining - time |> max 0 }
 
@@ -98,45 +106,44 @@ toString : Timer -> String
 toString timer =
     let
         inMinutes =
-            Time.inMinutes timer.remaining |> floor
+            timer.remaining // 60000
 
         inSeconds =
-            timer.remaining
-                - Time.minute
-                * (toFloat inMinutes)
-                |> Time.inSeconds
-                |> floor
+            modBy 60000 timer.remaining // 1000
 
         inMinutesString =
             if inMinutes > 0 then
-                Basics.toString inMinutes
+                String.fromInt inMinutes
                     ++ " minute"
                     ++ (if inMinutes > 1 then
                             "s"
+
                         else
                             ""
                        )
                     ++ " "
+
             else
                 ""
 
         inSecondsString =
-            Basics.toString inSeconds
+            String.fromInt inSeconds
                 ++ " second"
                 ++ (if inSeconds > 1 then
                         "s"
+
                     else
                         ""
                    )
     in
-        inMinutesString ++ inSecondsString
+    inMinutesString ++ inSecondsString
 
 
 subscriptions : Timer -> Sub Msg
 subscriptions timer =
     case timer.state of
         Running ->
-            Time.every timerStep (always Tick)
+            Time.every (toFloat timerStep) (always Tick)
 
         _ ->
             Sub.none

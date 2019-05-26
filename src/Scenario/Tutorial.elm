@@ -1,13 +1,12 @@
 module Scenario.Tutorial exposing (Msg, scenarioData)
 
-import Attempt exposing (AttemptPenalty(RemoveTime))
+import Attempt exposing (AttemptPenalty(..))
 import Code.Code as Code
 import Graph exposing (Edge, Graph, Node)
 import Machine.Machine as Machine
-import Machine.SimpleElectricalPanel exposing (Plug(BottomCenter, TopCenter))
-import Machine.WaterPipePuzzle exposing (Direction(Bottom, Left, Right, Top), OpeningType(Entrance, Exit), Option(NotRotatable), Pipe(..))
-import Scenario.Scenario exposing (Element(Code, Machine), ElementState(Done, ToDo), FinalState(Final, NotFinal), Reward(Modifier, Time), ScenarioData, ScenarioElement)
-import Time exposing (minute, second)
+import Machine.SimpleElectricalPanel exposing (Plug(..))
+import Machine.WaterPipePuzzle exposing (Direction(..), OpeningType(..), Option(..), Pipe(..))
+import Scenario.Scenario exposing (Element(..), ElementState(..), FinalState(..), Reward(..), ScenarioData, ScenarioElement)
 import Timer.Timer as Timer exposing (Timer)
 
 
@@ -22,16 +21,16 @@ machine =
         |> ScenarioElement ToDo NotFinal [ Modifier 9 ] "Bravo, additionnez ce numéro avec un autre numéro !"
 
 
-waterPipeMachine : ScenarioElement
+waterPipeMachine : Maybe ScenarioElement
 waterPipeMachine =
     [ [ ( Opening Right Entrance, [ NotRotatable ] ), ( LeftT, [] ), ( TopRightConnector, [] ), ( LeftRightConnector, [] ) ]
     , [ ( BottomRightConnector, [] ), ( TopBottomConnector, [] ), ( LeftRightConnector, [] ), ( LeftRightConnector, [] ) ]
     , [ ( BottomRightConnector, [] ), ( TopT, [] ), ( LeftT, [] ), ( LeftRightConnector, [] ) ]
     , [ ( BottomRightConnector, [] ), ( TopRightConnector, [] ), ( LeftT, [] ), ( Opening Left Exit, [] ) ]
     ]
-        |> Machine.waterPipePuzzle "test"
-        |> Machine
-        |> ScenarioElement ToDo NotFinal [ Modifier 9 ] "Bravo, additionnez ce numéro avec un autre numéro !"
+        |> Machine.waterPipePuzzle "water pipe puzzle"
+        |> Maybe.map Machine
+        |> Maybe.map (ScenarioElement ToDo NotFinal [ Modifier 9 ] "Bravo, additionnez ce numéro avec un autre numéro !")
 
 
 code : ScenarioElement
@@ -43,7 +42,8 @@ code =
 
 scenarioElementsNodes : List (Node ScenarioElement)
 scenarioElementsNodes =
-    [ Node 69 machine, Node 48 code, Node 1 waterPipeMachine ]
+    [ Node 69 machine |> Just, Node 48 code |> Just, waterPipeMachine |> Maybe.map (Node 1) ]
+        |> List.filterMap identity
 
 
 scenarioElementsEdges : List (Edge ())
@@ -58,15 +58,16 @@ scenarioElements =
 
 scenarioTimer : Timer
 scenarioTimer =
-    Timer.init (10 * minute)
+    Timer.init (10 * 60 * 1000)
 
 
 penaltyOnFailedAttempt : Int -> AttemptPenalty
 penaltyOnFailedAttempt failedAttempts =
     if failedAttempts < 5 then
-        RemoveTime minute
+        RemoveTime (60 * 1000)
+
     else
-        30 * second |> RemoveTime
+        30 * 1000 |> RemoveTime
 
 
 scenarioData : ScenarioData

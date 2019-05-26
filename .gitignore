@@ -1,3 +1,7 @@
+# Generated files
+.cache/
+dist/
+
 # IntelliJ
 .idea/
 
