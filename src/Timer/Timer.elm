@@ -1,5 +1,6 @@
-module Timer.Timer exposing (Milliseconds, Msg, State(..), Timer, init, pause, start, state, subscriptions, substractTime, toString, update)
+module Timer.Timer exposing (Milliseconds, Msg, State(..), Timer, decoder, init, pause, start, state, subscriptions, substractTime, toString, update)
 
+import Json.Decode as Decode exposing (Decoder)
 import Time
 
 
@@ -147,3 +148,10 @@ subscriptions timer =
 
         _ ->
             Sub.none
+
+
+decoder : Decoder Timer
+decoder =
+    Decode.field "initialTimeInSeconds" Decode.int
+        |> Decode.map ((*) 1000)
+        |> Decode.map init

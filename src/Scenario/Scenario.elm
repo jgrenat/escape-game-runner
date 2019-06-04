@@ -23,6 +23,8 @@ import Html exposing (Html, button, div, fieldset, form, h2, input, label, legen
 import Html.Attributes exposing (autocomplete, autofocus, for, id, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
 import IntDict
+import Json.Decode as Decode exposing (Decoder)
+import Json.Decode.Extra as Decode
 import Machine.Machine as Machine
 import Styles.Styles exposing (defaultButtonClasses)
 import Svg.Attributes exposing (height)
@@ -594,3 +596,45 @@ subscriptions model =
 
     else
         Sub.none
+
+
+decode : Decoder ScenarioData
+decode =
+    Decode.when (Decode.field "version" Decode.int) ((==) 1) scenarioV1Decoder
+
+
+scenarioV1Decoder : Decoder ScenarioData
+scenarioV1Decoder =
+    Decode.map4 ScenarioData
+        (Decode.field "name" Decode.string)
+        (Decode.field "elements" scenarioElementsDecoder)
+        (Decode.field "timer" Timer.decoder)
+        (Decode.field "penaltyStrategy" penaltyStrategyDecoder)
+
+
+scenarioElementsDecoder : Decoder ScenarioElements
+scenarioElementsDecoder =
+    Decode.succeed Graph.empty
+
+
+penaltyStrategyDecoder : Decoder (Int -> AttemptPenalty)
+penaltyStrategyDecoder =
+    Decode.when (Decode.field "type" Decode.string) ((==) "simpleTimeRemoval") simpleTimeRemovalStrategyDecoder
+
+
+simpleTimeRemovalStrategyDecoder : Decoder (Int -> AttemptPenalty)
+simpleTimeRemovalStrategyDecoder =
+    Decode.map3
+        (\threshold beforeThresholdInSeconds afterOrEqualToThresholdInSeconds failedAttempts ->
+            (if failedAttempts < threshold then
+                beforeThresholdInSeconds
+
+             else
+                afterOrEqualToThresholdInSeconds
+            )
+                * 1000
+                |> RemoveTime
+        )
+        Decode.int
+        Decode.int
+        Decode.int

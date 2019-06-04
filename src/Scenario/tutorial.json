@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "name": "Tutorial",
+  "timer": {
+    "initialTimeInSeconds": 600
+  },
+  "penaltyStrategy": {
+    "type": "simpleTimeRemoval",
+    "threshold": 5,
+    "beforeThresholdInSeconds": 60,
+    "afterOrEqualToThresholdInSeconds": 30
+  },
+  "elements": {
+    "69": {
+      "type": "machine",
+      "data": {
+        "type": "electricalPanel",
+        "legend": "Pour utiliser cette machine vous devez appuyer sur les boutons correspondant aux bons picots et appuyer sur Ok. Chaque erreur vous fait perdre une minute, il est donc préférable d'attendre de comprendre quels sont les bon picots avant de les utiliser.",
+        "expected": [
+          {
+            "from": "top center",
+            "to": "bottom center"
+          }
+        ],
+        "rewards": [
+          {
+            "type": "modifier",
+            "data": {
+              "value": 9
+            }
+          }
+        ],
+        "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !"
+      },
+      "triggerScenarioSuccess": false,
+      "dependsOn": []
+    },
+    "48": {
+      "type": "code",
+      "data": {
+        "value": "9372",
+        "rewards": [],
+        "successMessage": "Bravo, vous avez gagné !"
+      },
+      "triggerScenarioSuccess": true,
+      "dependsOn": [
+        69
+      ]
+    },
+    "1": {
+      "type": "machine",
+      "data": {
+        "type": "waterPipe",
+        "legend": "water pipe puzzle",
+        "pipes": [
+          [
+            {
+              "type": "opening",
+              "direction": "right",
+              "openingType": "Entrance",
+              "attributes": [
+                "notRotatable"
+              ]
+            },
+            {
+              "type": "leftT",
+              "attributes": []
+            },
+            {
+              "type": "topRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "leftRightConnector",
+              "attributes": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "topBottomConnector",
+              "attributes": []
+            },
+            {
+              "type": "leftRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "leftRightConnector",
+              "attributes": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "topT",
+              "attributes": []
+            },
+            {
+              "type": "leftT",
+              "attributes": []
+            },
+            {
+              "type": "leftRightConnector",
+              "attributes": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "topRightConnector",
+              "attributes": []
+            },
+            {
+              "type": "leftT",
+              "attributes": []
+            },
+            {
+              "type": "opening",
+              "direction": "left",
+              "openingType": "exit",
+              "attributes": []
+            }
+          ]
+        ],
+        "rewards": [
+          {
+            "type": "modifier",
+            "data": {
+              "value": 9
+            }
+          }
+        ],
+        "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !"
+      },
+      "triggerScenarioSuccess": false,
+      "dependsOn": []
+    }
+  }
+}
