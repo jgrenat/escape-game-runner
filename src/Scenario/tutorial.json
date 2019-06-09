@@ -16,32 +16,32 @@
       "data": {
         "type": "electricalPanel",
         "legend": "Pour utiliser cette machine vous devez appuyer sur les boutons correspondant aux bons picots et appuyer sur Ok. Chaque erreur vous fait perdre une minute, il est donc préférable d'attendre de comprendre quels sont les bon picots avant de les utiliser.",
-        "expected": [
+        "expectedPlugs": [
           {
             "from": "top center",
             "to": "bottom center"
           }
-        ],
-        "rewards": [
-          {
-            "type": "modifier",
-            "data": {
-              "value": 9
-            }
-          }
-        ],
-        "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !"
+        ]
       },
+      "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !",
+      "rewards": [
+        {
+          "type": "modifier",
+          "data": {
+            "value": 9
+          }
+        }
+      ],
       "triggerScenarioSuccess": false,
       "dependsOn": []
     },
     "48": {
       "type": "code",
       "data": {
-        "value": "9372",
-        "rewards": [],
-        "successMessage": "Bravo, vous avez gagné !"
+        "value": "9372"
       },
+      "successMessage": "Bravo, vous avez gagné !",
+      "rewards": [],
       "triggerScenarioSuccess": true,
       "dependsOn": [
         69
@@ -57,91 +57,91 @@
             {
               "type": "opening",
               "direction": "right",
-              "openingType": "Entrance",
-              "attributes": [
+              "openingType": "entrance",
+              "options": [
                 "notRotatable"
               ]
             },
             {
               "type": "leftT",
-              "attributes": []
+              "options": []
             },
             {
               "type": "topRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftRightConnector",
-              "attributes": []
+              "options": []
             }
           ],
           [
             {
               "type": "bottomRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "topBottomConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftRightConnector",
-              "attributes": []
+              "options": []
             }
           ],
           [
             {
               "type": "bottomRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "topT",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftT",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftRightConnector",
-              "attributes": []
+              "options": []
             }
           ],
           [
             {
               "type": "bottomRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "topRightConnector",
-              "attributes": []
+              "options": []
             },
             {
               "type": "leftT",
-              "attributes": []
+              "options": []
             },
             {
               "type": "opening",
               "direction": "left",
               "openingType": "exit",
-              "attributes": []
+              "options": []
             }
           ]
-        ],
-        "rewards": [
-          {
-            "type": "modifier",
-            "data": {
-              "value": 9
-            }
-          }
-        ],
-        "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !"
+        ]
       },
+      "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !",
+      "rewards": [
+        {
+          "type": "modifier",
+          "data": {
+            "value": 9
+          }
+        }
+      ],
       "triggerScenarioSuccess": false,
       "dependsOn": []
     }

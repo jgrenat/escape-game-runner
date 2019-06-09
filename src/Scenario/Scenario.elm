@@ -8,6 +8,7 @@ module Scenario.Scenario exposing
     , ScenarioData
     , ScenarioElement
     , State(..)
+    , decoder
     , fromScenarioData
     , start
     , subscriptions
@@ -18,19 +19,21 @@ module Scenario.Scenario exposing
 import Attempt exposing (AttemptPenalty(..), AttemptStatus(..))
 import Code.Code as Code
 import FeatherIcons
-import Graph exposing (Edge, Graph, Node, NodeContext)
+import Graph exposing (AcyclicGraph(..), Edge, Graph, Node, NodeContext)
 import Html exposing (Html, button, div, fieldset, form, h2, input, label, legend, p, text)
 import Html.Attributes exposing (autocomplete, autofocus, for, id, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
 import IntDict
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Extra as Decode
-import Machine.Machine as Machine
+import List.Extra as List
+import Machine.Machine as Machine exposing (simpleElectricalPanel, waterPipePuzzle)
+import Machine.SimpleElectricalPanel exposing (Plug(..))
+import Machine.WaterPipePuzzle exposing (Direction(..), OpeningType(..), Option(..), Pipe(..), PipeWithOptions)
 import Styles.Styles exposing (defaultButtonClasses)
 import Svg.Attributes exposing (height)
 import Tachyons exposing (classes)
-import Tachyons.Classes exposing (b__black_10, ba, bg_animate, bg_black_70, bg_blue, bg_green, bg_white, black_80, bn, border_box, br2_ns, br__left_ns, br__right_ns, button_reset, center, cf, clip, f2, f3, f4_ns, f5, f5_l, f6, fl, flex, h1, h3, hover_bg_black, input_reset, items_center, justify_center, lh_solid, lh_title, ma0, mb3, mb5, mw7, pa0, pa3, pa4, pointer, pv3, tc, tl, w1, w2, w3, w4, w_100, w_20_l, w_25_m, w_60_m, w_70_l, w_75_m, w_80_l, white)
-import Time exposing (Posix, utc)
+import Tachyons.Classes exposing (b__black_10, ba, bg_animate, bg_black_70, bg_blue, bg_green, bg_white, black_80, bn, border_box, br2_ns, br__left_ns, br__right_ns, button_reset, center, cf, clip, f2, f3, f4_ns, f5, f5_l, f6, fl, flex, h3, hover_bg_black, input_reset, items_center, justify_center, lh_solid, lh_title, ma0, mb3, mw7, pa0, pa3, pa4, pointer, pv3, tc, tl, w3, w4, w_100, w_20_l, w_25_m, w_75_m, w_80_l, white)
 import Timer.Timer as Timer exposing (Timer)
 
 
@@ -78,6 +81,12 @@ type alias ScenarioElement =
     }
 
 
+type alias ScenarioElementDependency =
+    { from : Int
+    , to : Int
+    }
+
+
 type DependenciesState
     = AtLeastOneRemaining
     | AllDone
@@ -118,9 +127,13 @@ type alias ScenarioData =
     }
 
 
+type alias Seconds =
+    Int
+
+
 type Reward
     = Modifier Int
-    | Time Posix
+    | Time Seconds
 
 
 fromScenarioData : ScenarioData -> Model
@@ -299,7 +312,7 @@ updateCode codeModel codeMsg model =
             codeMaybe |> Maybe.andThen (findCodeIdInElements model.scenarioElements)
     in
     case ( codeMaybe, validCodeIdMaybe ) of
-        ( Just code, Just ( codeId, dependenciesState ) ) ->
+        ( Just _, Just ( codeId, dependenciesState ) ) ->
             let
                 updatedScenarioElements =
                     Graph.update codeId flagNodeContextAsDone model.scenarioElements
@@ -327,7 +340,7 @@ updateCode codeModel codeMsg model =
                         , state = scenarioState
                     }
 
-        ( Just code, Nothing ) ->
+        ( Just _, Nothing ) ->
             let
                 failedAttempts =
                     model.failedAttempts + 1
@@ -488,7 +501,7 @@ viewCodeMissingDependenciesScreen =
 
 
 viewElementDoneScreen : Int -> ScenarioElement -> Html Msg
-viewElementDoneScreen elementId scenarioElement =
+viewElementDoneScreen _ scenarioElement =
     let
         rewardsView =
             List.map viewReward scenarioElement.rewards
@@ -508,7 +521,7 @@ viewReward reward =
             div [ classes [ w3, h3, bg_blue, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ String.fromInt value |> text ]
 
         Time time ->
-            div [ classes [ w4, h3, bg_green, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ String.fromInt (Time.toSecond utc time) ++ "s" |> text ]
+            div [ classes [ w4, h3, bg_green, white, flex, items_center, justify_center, f3, center ] ] [ "+" ++ String.fromInt time ++ "s" |> text ]
 
 
 
@@ -598,8 +611,8 @@ subscriptions model =
         Sub.none
 
 
-decode : Decoder ScenarioData
-decode =
+decoder : Decoder ScenarioData
+decoder =
     Decode.when (Decode.field "version" Decode.int) ((==) 1) scenarioV1Decoder
 
 
@@ -614,12 +627,315 @@ scenarioV1Decoder =
 
 scenarioElementsDecoder : Decoder ScenarioElements
 scenarioElementsDecoder =
-    Decode.succeed Graph.empty
+    let
+        stringKeysToNumbersDecoder : List ( String, Decode.Value ) -> Decoder (List ( Int, Decode.Value ))
+        stringKeysToNumbersDecoder keyValuePairs =
+            List.map
+                (\( numberString, elementValue ) ->
+                    String.toInt numberString
+                        |> Maybe.map Decode.succeed
+                        |> Maybe.withDefault (Decode.fail "One of the keys is invalid")
+                        |> Decode.map (\elementNumber -> ( elementNumber, elementValue ))
+                )
+                keyValuePairs
+                |> Decode.combine
+
+        elementValueToScenarioElementDecoder : Int -> Decoder ( Int, ScenarioElement, List ScenarioElementDependency )
+        elementValueToScenarioElementDecoder elementNumber =
+            Decode.field "dependsOn"
+                (Decode.list
+                    (Decode.int
+                        |> Decode.map (\dependency -> ScenarioElementDependency dependency elementNumber)
+                    )
+                )
+                |> Decode.map3 (\a b c -> ( a, b, c ))
+                    (Decode.succeed elementNumber)
+                    scenarioElementDecoder
+
+        numberValuePairsToScenarioElementDecoder : List ( Int, Decode.Value ) -> Decoder (List ( Int, ScenarioElement, List ScenarioElementDependency ))
+        numberValuePairsToScenarioElementDecoder numberValuePairs =
+            List.map
+                (\( elementNumber, elementValue ) ->
+                    Decode.decodeValue (elementValueToScenarioElementDecoder elementNumber) elementValue
+                        |> Result.mapError Decode.errorToString
+                        |> Decode.fromResult
+                )
+                numberValuePairs
+                |> Decode.combine
+    in
+    Decode.keyValuePairs Decode.value
+        |> Decode.andThen stringKeysToNumbersDecoder
+        |> Decode.andThen numberValuePairsToScenarioElementDecoder
+        |> Decode.andThen scenarioElementsDataToScenarioElementsDecoder
+
+
+scenarioElementsDataToScenarioElementsDecoder : List ( Int, ScenarioElement, List ScenarioElementDependency ) -> Decoder ScenarioElements
+scenarioElementsDataToScenarioElementsDecoder scenarioElementsData =
+    let
+        existingIds =
+            List.map (\( id, _, _ ) -> id) scenarioElementsData
+
+        dependencies =
+            List.concatMap (\( _, _, elementDependencies ) -> elementDependencies) scenarioElementsData
+
+        hasUnknownDependencies =
+            List.map .to dependencies
+                |> List.any (\idToCheck -> List.notMember idToCheck existingIds)
+
+        nodes =
+            List.map (\( id, scenarioElement, _ ) -> Node id scenarioElement) scenarioElementsData
+
+        edges =
+            List.map (\{ from, to } -> Edge from to ()) dependencies
+
+        scenarioElementsGraph =
+            Graph.fromNodesAndEdges nodes edges
+    in
+    if hasUnknownDependencies then
+        Decode.fail "Unknown dependencies have been found"
+
+    else
+        scenarioElementsGraph
+            |> Graph.checkAcyclic
+            |> Result.map (always scenarioElementsGraph)
+            |> Result.mapError (\edge -> "There is a cyclic dependency between the following elements of the scenario: " ++ String.fromInt edge.from ++ String.fromInt edge.to)
+            |> Decode.fromResult
+
+
+scenarioElementDecoder : Decoder ScenarioElement
+scenarioElementDecoder =
+    Decode.oneOf
+        [ Decode.when (Decode.field "type" Decode.string) ((==) "code") codeElementDecoder
+        , Decode.when (Decode.field "type" Decode.string) ((==) "machine") machineElementDecoder
+        ]
+        |> Decode.map4 (ScenarioElement ToDo)
+            (Decode.field "triggerScenarioSuccess" Decode.bool
+                |> Decode.map
+                    (\isFinal ->
+                        if isFinal then
+                            Final
+
+                        else
+                            NotFinal
+                    )
+            )
+            (Decode.field "rewards" (Decode.list rewardDecoder))
+            (Decode.field "successMessage" Decode.string)
+
+
+rewardDecoder : Decoder Reward
+rewardDecoder =
+    Decode.oneOf
+        [ Decode.when (Decode.field "type" Decode.string) ((==) "modifier") modifierRewardDecoder
+        , Decode.when (Decode.field "type" Decode.string) ((==) "time") timeRewardDecoder
+        ]
+
+
+modifierRewardDecoder : Decoder Reward
+modifierRewardDecoder =
+    Decode.map Modifier (Decode.at [ "data", "value" ] Decode.int)
+
+
+timeRewardDecoder : Decoder Reward
+timeRewardDecoder =
+    Decode.map Time (Decode.at [ "data", "seconds" ] Decode.int)
+
+
+codeElementDecoder : Decoder Element
+codeElementDecoder =
+    Decode.at [ "data", "value" ] Decode.string
+        |> Decode.map Code
+
+
+machineElementDecoder : Decoder Element
+machineElementDecoder =
+    Decode.oneOf
+        [ Decode.when (Decode.field "type" Decode.string) ((==) "electricalPanel") electricalPanelDecoder
+        , Decode.when (Decode.field "type" Decode.string) ((==) "waterPipe") waterPipeDecoder
+        ]
+        |> Decode.field "data"
+
+
+waterPipeDecoder : Decoder Element
+waterPipeDecoder =
+    Decode.map2 (\legend pipes -> waterPipePuzzle legend pipes)
+        (Decode.field "legend" Decode.string)
+        (Decode.field "pipes" pipesDecoder)
+        |> Decode.map (Result.fromMaybe "Invalid pipes configuration")
+        |> Decode.andThen Decode.fromResult
+        |> Decode.map Machine
+
+
+pipesDecoder : Decoder (List (List PipeWithOptions))
+pipesDecoder =
+    Decode.list (Decode.list pipeDecoder)
+
+
+pipeDecoder : Decoder PipeWithOptions
+pipeDecoder =
+    Decode.map2 Tuple.pair
+        (Decode.oneOf
+            [ Decode.when (Decode.field "type" Decode.string) ((==) "opening") openingPipeDecoder
+            , normalPipeDecoder
+            ]
+        )
+        (Decode.field "options" (Decode.list pipeOptionsDecoder))
+
+
+openingPipeDecoder : Decoder Pipe
+openingPipeDecoder =
+    Decode.map2 Opening
+        (Decode.field "direction" pipeDirectionDecoder)
+        (Decode.field "openingType" openingTypeDecoder)
+
+
+pipeDirectionDecoder : Decoder Direction
+pipeDirectionDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\directionString ->
+                case directionString of
+                    "top" ->
+                        Decode.succeed Top
+
+                    "right" ->
+                        Decode.succeed Right
+
+                    "bottom" ->
+                        Decode.succeed Bottom
+
+                    "left" ->
+                        Decode.succeed Left
+
+                    unknown ->
+                        Decode.fail ("Unknown direction for opening pipe: \"" ++ unknown ++ "\"")
+            )
+
+
+pipeOptionsDecoder : Decoder Option
+pipeOptionsDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\optionString ->
+                case optionString of
+                    "notRotatable" ->
+                        Decode.succeed NotRotatable
+
+                    unknown ->
+                        Decode.fail ("Unknown option for pipe: \"" ++ unknown ++ "\"")
+            )
+
+
+normalPipeDecoder : Decoder Pipe
+normalPipeDecoder =
+    Decode.field "type" Decode.string
+        |> Decode.andThen
+            (\pipeType ->
+                case pipeType of
+                    "connector4" ->
+                        Decode.succeed Connector4
+
+                    "bottomLeftConnector" ->
+                        Decode.succeed BottomLeftConnector
+
+                    "bottomRightConnector" ->
+                        Decode.succeed BottomRightConnector
+
+                    "bottomT" ->
+                        Decode.succeed BottomT
+
+                    "leftRightConnector" ->
+                        Decode.succeed LeftRightConnector
+
+                    "leftT" ->
+                        Decode.succeed LeftT
+
+                    "rightT" ->
+                        Decode.succeed RightT
+
+                    "topLeftConnector" ->
+                        Decode.succeed TopLeftConnector
+
+                    "topBottomConnector" ->
+                        Decode.succeed TopBottomConnector
+
+                    "topRightConnector" ->
+                        Decode.succeed TopRightConnector
+
+                    "topT" ->
+                        Decode.succeed TopT
+
+                    unknown ->
+                        Decode.fail ("Unknown pipe type: \"" ++ unknown ++ "\"")
+            )
+
+
+openingTypeDecoder : Decoder OpeningType
+openingTypeDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\openingTypeString ->
+                case openingTypeString of
+                    "entrance" ->
+                        Decode.succeed Entrance
+
+                    "exit" ->
+                        Decode.succeed Exit
+
+                    unknown ->
+                        Decode.fail ("Unknown opening type for opening pipe: \"" ++ unknown ++ "\"")
+            )
+
+
+electricalPanelDecoder : Decoder Element
+electricalPanelDecoder =
+    Decode.map2 (\legend expectedPlugs -> simpleElectricalPanel legend expectedPlugs)
+        (Decode.field "legend" Decode.string)
+        (Decode.field "expectedPlugs" (Decode.list plugTupleDecoder))
+        |> Decode.map Machine
+
+
+plugTupleDecoder : Decoder ( Plug, Plug )
+plugTupleDecoder =
+    Decode.map2 Tuple.pair
+        (Decode.field "from" plugDecoder)
+        (Decode.field "to" plugDecoder)
+
+
+plugDecoder : Decoder Plug
+plugDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\plugString ->
+                case plugString of
+                    "top left" ->
+                        Decode.succeed TopLeft
+
+                    "top center" ->
+                        Decode.succeed TopCenter
+
+                    "top right" ->
+                        Decode.succeed TopRight
+
+                    "bottom left" ->
+                        Decode.succeed BottomLeft
+
+                    "bottom center" ->
+                        Decode.succeed BottomCenter
+
+                    "bottom right" ->
+                        Decode.succeed BottomRight
+
+                    unknown ->
+                        "Unknown pipe name received: \"" ++ unknown ++ "\"" |> Decode.fail
+            )
 
 
 penaltyStrategyDecoder : Decoder (Int -> AttemptPenalty)
 penaltyStrategyDecoder =
-    Decode.when (Decode.field "type" Decode.string) ((==) "simpleTimeRemoval") simpleTimeRemovalStrategyDecoder
+    Decode.oneOf
+        [ Decode.when (Decode.field "type" Decode.string) ((==) "simpleTimeRemoval") simpleTimeRemovalStrategyDecoder
+        ]
 
 
 simpleTimeRemovalStrategyDecoder : Decoder (Int -> AttemptPenalty)
@@ -635,6 +951,6 @@ simpleTimeRemovalStrategyDecoder =
                 * 1000
                 |> RemoveTime
         )
-        Decode.int
-        Decode.int
-        Decode.int
+        (Decode.field "threshold" Decode.int)
+        (Decode.field "beforeThresholdInSeconds" Decode.int)
+        (Decode.field "afterOrEqualToThresholdInSeconds" Decode.int)

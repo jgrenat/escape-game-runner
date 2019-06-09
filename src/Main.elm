@@ -1,11 +1,10 @@
-module Main exposing (Model, Msg(..), applyUpdate, applyUpdates, init, main, notStartedView, subscriptions, update, view)
+module Main exposing (main)
 
 import Browser exposing (Document)
 import Html exposing (Html, button, div, h1, p, text)
 import Html.Events exposing (onClick)
-import Json.Decode exposing (Value)
+import Json.Decode as Decode exposing (Value)
 import Scenario.Scenario as Scenario exposing (State(..))
-import Scenario.Tutorial exposing (scenarioData)
 import Styles.Styles exposing (validateButtonClasses)
 import Tachyons exposing (classes, tachyons)
 import Tachyons.Classes exposing (center, f5, f_subheadline, lh_solid, mw6, ph2, sans_serif)
@@ -15,13 +14,21 @@ import Tachyons.Classes exposing (center, f5, f_subheadline, lh_solid, mw6, ph2,
 ---- MODEL ----
 
 
-type alias Model =
-    { scenario : Scenario.Model }
+type Model
+    = ValidScenario Scenario.Model
+    | InvalidScenario String
 
 
 init : Value -> ( Model, Cmd Msg )
 init _ =
-    ( { scenario = Scenario.fromScenarioData scenarioData }, Cmd.none )
+    (case Decode.decodeString Scenario.decoder tutorialScenario of
+        Ok scenario ->
+            ValidScenario (Scenario.fromScenarioData scenario)
+
+        Err error ->
+            InvalidScenario (Decode.errorToString error)
+    )
+        |> (\scenario -> ( scenario, Cmd.none ))
 
 
 
@@ -35,16 +42,21 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        StartScenario ->
-            ( { model | scenario = Scenario.start model.scenario }, Cmd.none )
+    case model of
+        ValidScenario scenario ->
+            case msg of
+                StartScenario ->
+                    ( ValidScenario (Scenario.start scenario), Cmd.none )
 
-        ScenarioMsg scenarioMsg ->
-            let
-                newScenario =
-                    Scenario.update scenarioMsg model.scenario
-            in
-            ( { model | scenario = newScenario }, Cmd.none )
+                ScenarioMsg scenarioMsg ->
+                    let
+                        newScenario =
+                            Scenario.update scenarioMsg scenario
+                    in
+                    ( ValidScenario newScenario, Cmd.none )
+
+        InvalidScenario _ ->
+            ( model, Cmd.none )
 
 
 
@@ -53,17 +65,176 @@ update msg model =
 
 view : Model -> Document Msg
 view model =
-    Document "title"
-        [ div [ classes [ mw6, center, sans_serif, f5, ph2 ] ]
-            [ tachyons.css
-            , h1 [ classes [ f_subheadline, lh_solid ] ] [ text "Unlock" ]
-            , if model.scenario.state == NotStarted then
-                notStartedView
+    case model of
+        ValidScenario scenario ->
+            Document scenario.name
+                [ div [ classes [ mw6, center, sans_serif, f5, ph2 ] ]
+                    [ tachyons.css
+                    , h1 [ classes [ f_subheadline, lh_solid ] ] [ text "Unlock" ]
+                    , if scenario.state == NotStarted then
+                        notStartedView
 
-              else
-                Scenario.view model.scenario |> Html.map ScenarioMsg
-            ]
+                      else
+                        Scenario.view scenario |> Html.map ScenarioMsg
+                    ]
+                ]
+
+        InvalidScenario _ ->
+            Document "Invalid scenario" [ text "Oh, it looks like this scenario is invalid !?" ]
+
+
+tutorialScenario : String
+tutorialScenario =
+    """
+{
+  "version": 1,
+  "name": "Tutorial",
+  "timer": {
+    "initialTimeInSeconds": 600
+  },
+  "penaltyStrategy": {
+    "type": "simpleTimeRemoval",
+    "threshold": 5,
+    "beforeThresholdInSeconds": 60,
+    "afterOrEqualToThresholdInSeconds": 30
+  },
+  "elements": {
+    "69": {
+      "type": "machine",
+      "data": {
+        "type": "electricalPanel",
+        "legend": "Pour utiliser cette machine vous devez appuyer sur les boutons correspondant aux bons picots et appuyer sur Ok. Chaque erreur vous fait perdre une minute, il est donc préférable d'attendre de comprendre quels sont les bon picots avant de les utiliser.",
+        "expectedPlugs": [
+          {
+            "from": "top center",
+            "to": "bottom center"
+          }
         ]
+      },
+      "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !",
+      "rewards": [
+        {
+          "type": "modifier",
+          "data": {
+            "value": 9
+          }
+        }
+      ],
+      "triggerScenarioSuccess": false,
+      "dependsOn": []
+    },
+    "48": {
+      "type": "code",
+      "data": {
+        "value": "9372"
+      },
+      "successMessage": "Bravo, vous avez gagné !",
+      "rewards": [],
+      "triggerScenarioSuccess": true,
+      "dependsOn": [
+        69
+      ]
+    },
+    "1": {
+      "type": "machine",
+      "data": {
+        "type": "waterPipe",
+        "legend": "water pipe puzzle",
+        "pipes": [
+          [
+            {
+              "type": "opening",
+              "direction": "right",
+              "openingType": "entrance",
+              "options": [
+                "notRotatable"
+              ]
+            },
+            {
+              "type": "leftT",
+              "options": []
+            },
+            {
+              "type": "topRightConnector",
+              "options": []
+            },
+            {
+              "type": "leftRightConnector",
+              "options": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "options": []
+            },
+            {
+              "type": "topBottomConnector",
+              "options": []
+            },
+            {
+              "type": "leftRightConnector",
+              "options": []
+            },
+            {
+              "type": "leftRightConnector",
+              "options": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "options": []
+            },
+            {
+              "type": "topT",
+              "options": []
+            },
+            {
+              "type": "leftT",
+              "options": []
+            },
+            {
+              "type": "leftRightConnector",
+              "options": []
+            }
+          ],
+          [
+            {
+              "type": "bottomRightConnector",
+              "options": []
+            },
+            {
+              "type": "topRightConnector",
+              "options": []
+            },
+            {
+              "type": "leftT",
+              "options": []
+            },
+            {
+              "type": "opening",
+              "direction": "left",
+              "openingType": "exit",
+              "options": []
+            }
+          ]
+        ]
+      },
+      "successMessage": "Bravo, additionnez ce numéro avec un autre numéro !",
+      "rewards": [
+        {
+          "type": "modifier",
+          "data": {
+            "value": 9
+          }
+        }
+      ],
+      "triggerScenarioSuccess": false,
+      "dependsOn": []
+    }
+  }
+}"""
 
 
 notStartedView : Html Msg
@@ -79,8 +250,13 @@ notStartedView =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Scenario.subscriptions model.scenario
-        |> Sub.map ScenarioMsg
+    case model of
+        ValidScenario scenario ->
+            Scenario.subscriptions scenario
+                |> Sub.map ScenarioMsg
+
+        InvalidScenario _ ->
+            Sub.none
 
 
 
@@ -95,25 +271,3 @@ main =
         , update = update
         , subscriptions = subscriptions
         }
-
-
-applyUpdates : List Msg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-applyUpdates messages ( model, cmd ) =
-    List.foldr applyUpdate ( model, [ cmd ] ) messages
-        |> Tuple.mapSecond Cmd.batch
-
-
-applyUpdate : Msg -> ( Model, List (Cmd Msg) ) -> ( Model, List (Cmd Msg) )
-applyUpdate msg ( currentModel, currentCommands ) =
-    let
-        ( newModel, cmd ) =
-            update msg currentModel
-
-        newCommands =
-            if cmd == Cmd.none then
-                currentCommands
-
-            else
-                cmd :: currentCommands
-    in
-    ( newModel, newCommands )
